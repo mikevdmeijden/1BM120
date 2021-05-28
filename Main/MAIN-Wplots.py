@@ -20,12 +20,13 @@ import matplotlib.pyplot as plt
 # Load environment
 env = or_gym.make('Knapsack-v2')
 env.mask = False
+np.random.seed(2021)
 
 print("Action Space: {}".format(env.action_space))
 print("State space: {}".format(env.observation_space))
 
 #___ PARAMETERS ___#
-TRAIN_EPSISODES = 1000
+TRAIN_EPSISODES = 10
 TEST_EPSISODES = 100
 LEARNING_RATE = 0.05 
 DISCOUNT_RATE = 0.9 
@@ -64,7 +65,7 @@ def train(env, replay_memory, model, target_model, done, LEARNING_RATE, DISCOUNT
     rewards.sort() # Sort the rewards list  
     nr_items = int(len_replay / HIGH_PER) # Number of items in the 'HIGH_PER' range
     high_list = [ x * (((i * FACTOR) + nr_items) / nr_items) for x, i in zip(rewards[-nr_items:], range(nr_items))] # Apply factor to high rewards 
-    low_list = [ x * (i / (nr_items * FACTOR)) for x, i in zip(rewards[:nr_items], range(nr_items))] # Apply factor to low rewards
+    low_list = [ x * (i / nr_items) for x, i in zip(rewards[:nr_items], range(nr_items))] # Apply factor to low rewards
     rewards = low_list + rewards[nr_items:-nr_items] + high_list # Overwrite with the adjusted rewards list
     mini_batch_ind = np.random.choice(list(range(len(rewards))), BATCH_SIZE, p = [x/sum(rewards) for x in rewards]) # Sample the indices of observations
     # where the observations with high rewards are more likely sampled.
@@ -228,10 +229,10 @@ def line_plot(data, title = "", subtitle = "", ylabel = "", file_name = "output"
     
     # Styling
     plt.ylabel(ylabel, fontsize = 16, ** other_font)
-    plt.xlabel("Generations", fontsize = 16, ** other_font)
+    plt.xlabel("Episodes", fontsize = 16, ** other_font)
     plt.title(title, loc='left', fontsize=20, fontweight = "bold", ** other_font)
     plt.title(subtitle, loc='right', fontsize=14, color='dimgray', ** other_font)
-    plt.legend(loc = 1, edgecolor = 'white')
+    plt.legend(loc = 2, edgecolor = 'white')
     plt.savefig(file_name + ".jpg")
     plt.show()
 
@@ -244,7 +245,7 @@ def DecayRate():
     c = main(0.001, LEARNING_RATE, DISCOUNT_RATE)
     d = main(0.01, LEARNING_RATE, DISCOUNT_RATE)
     
-    total = {"Decay = 0.0001": a, "Decay = 0.0005":b, "Decay = 0.001":c, "Decay = 0.01":d}
+    total = {"Decay = 0.0001": a[0], "Decay = 0.0005":b[0], "Decay = 0.001":c[0], "Decay = 0.01":d[0]}
     df = pd.DataFrame(total)
     #total = [a,b,c,d]
     line_plot(df, "Comparison for different values of the decay rate", ylabel = "Average reward over last 100 episodes")
@@ -256,7 +257,7 @@ def LearningRate():
     c =  main(DECAY, 0.2, DISCOUNT_RATE)
     d =  main(DECAY, 0.4, DISCOUNT_RATE)
     
-    total = {"Learning rate = 0.05": a, "Learning rate = 0.1":b, "Learning rate = 0.2":c, "Learning rate = 0.4":d}
+    total = {"Learning rate = 0.05": a[0], "Learning rate = 0.1":b[0], "Learning rate = 0.2":c[0], "Learning rate = 0.4":d[0]}
     df = pd.DataFrame(total)
     
     #total = [a,b,c,d]
@@ -269,7 +270,7 @@ def DiscountRate():
     c =  main(DECAY, LEARNING_RATE, 0.9)
     d =  main(DECAY, LEARNING_RATE, 0.8)
     
-    total = {"Discount rate = 0.99": a, "Discount rate = 0.95":b, "Discount rate = 0.9":c, "Discount rate = 0.8":d}
+    total = {"Discount rate = 0.99": a[0], "Discount rate = 0.95":b[0], "Discount rate = 0.9":c[0], "Discount rate = 0.8":d[0]}
     df = pd.DataFrame(total)
     
     #total = [a,b,c,d]
@@ -281,11 +282,11 @@ def Optimal():
     return a
 
 
-#DecayRate()
+DecayRate()
 #LearningRate()
 #DiscountRate()  
-a = Optimal()
-print(a[1])
+#a = Optimal()
+#print(a[1])
 
 #if __name__ == '__main__':
 #    main(DECAY, LEARNING_RATE, DISCOUNT_RATE)
