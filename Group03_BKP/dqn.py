@@ -1,21 +1,26 @@
 # -*- coding: utf-8 -*-
 
+# Libraries
 import numpy as np
 from model import agent
 from collections import deque
 
+# _____________________________________ # 
+#               PARAMETERS              #
+# _____________________________________ #
 FILE_LOC = './trained_model/saved_weights' # Location saved weights
-LEARNING_RATE = 0.4 
-DISCOUNT_RATE = 0.9 
-MIN_REPLAY_SIZE = 250
+LEARNING_RATE = 0.4 # The learning rate
+DISCOUNT_RATE = 0.9 # The discount rate
+MIN_REPLAY_SIZE = 250 # How large the replay memory must be before training
 BATCH_SIZE = 100 # Number of items to be sampled
-FACTOR = 2 # How much one wants to punish or prize high rewards
-HIGH_PER = 10 # The high and low percentage of rewards in the replay memory
-TRAIN_EPSISODES = 10_000
-TEST_EPSISODES = 100
+FACTOR = 1.5 # How much one wants to punish or prize high rewards
+HIGH_PER = 20 # The high and low percentage of rewards in the replay memory
+TRAIN_EPSISODES = 1_000 # Amount of train episodes
+TEST_EPSISODES = 100 # Amount of test episodes
 MAX_EPSILON = 1 # You can't explore more than 100% of the time
 MIN_EPSILON = 0.01 # At a minimum, we'll always explore 1% of the time
-DECAY = 0.0005 # How fast the epsilon decays
+DECAY = 0.01 # How fast the epsilon decays
+# _____________________________________ #
 
 def train_model(env, replay_memory, model, target_model, done):
     """
@@ -27,7 +32,7 @@ def train_model(env, replay_memory, model, target_model, done):
     if len_replay < MIN_REPLAY_SIZE:
         return
 
-    rewards = [transition[2] for transition in replay_memory] # Extract rewards from replay memory
+    rewards = [transition[2] for transition in replay_memory] # Extract and copy rewards from replay memory
     rewards.sort() # Sort the rewards list  
     nr_items = int(len_replay / HIGH_PER) # Number of items in the 'HIGH_PER' range
     high_list = [ x * (((i * FACTOR) + nr_items) / nr_items) for x, i in zip(rewards[-nr_items:], range(nr_items))] # Apply factor to high rewards 
@@ -62,13 +67,15 @@ def avail_item_values(env):
     """
     Returns the available item values
     """
-    avail_item_values = []
+    avail_item_values = [] # Initialize list for item values
     for item in range(env.N):
+        # If weight + current sack weight is smaller than the limit
         if env.item_weights[item] + env.current_weight < env.max_weight:
+            # If the item limit is not exceeded
             if env.item_limits[item] > 0:
-                avail_item_values.append(env.item_values[item])
+                avail_item_values.append(env.item_values[item]) # append the item value
             else:
-                avail_item_values.append(0)
+                avail_item_values.append(0) 
         else:
             avail_item_values.append(0)
     
@@ -77,7 +84,8 @@ def avail_item_values(env):
 def train_dqn(env):
     
     epsilon = 1 # Epsilon-greedy algorithm in initialized at 1 meaning every step is random at the start
-    # 1. Initialize the Target and Main models
+    
+    # Initialize the Target and Main models
     # Main Model (updated every 4 steps)
     model = agent(env.N)
     # Target Model (updated every 100 steps)
@@ -88,8 +96,10 @@ def train_dqn(env):
     replay_memory = deque(maxlen=800)
 
     steps_to_update_target_model = 0
-    all_rewards = []
-        
+    episode_reward_history = []
+    total_reward_history = []
+    
+    np.random.seed(2021) # Set seed
     for episode in range(TRAIN_EPSISODES):
         total_training_rewards = 0
         observation = env.reset()
@@ -97,56 +107,65 @@ def train_dqn(env):
         reward_list = []; item_list = []
         while not done:
             steps_to_update_target_model += 1
-            random_number = np.random.rand()
-            # 2. Explore using the Epsilon Greedy Exploration Strategy
-            observation = avail_item_values(env)
+            random_number = np.random.rand() # Randomly generate a number between 0 and 1
+            observation = avail_item_values(env) # Overwrite current observation with custom function
+            
+            # Explore using the Epsilon Greedy Exploration Strategy
             if random_number <= epsilon: # Explore
                 action = env.action_space.sample() 
-            else: # Exploit
-                predicted = model.predict(observation.reshape(1, env.N))
-                action = np.argmax(predicted)
+            else: # Else Exploit
+                predicted = model.predict(observation.reshape(1, env.N)) # Provide output of the NN given a observation
+                action = np.argmax(predicted) # Choose the item with the maximum output
                 
-            new_observation, reward, done, info = env.step(action)
-            new_observation = avail_item_values(env)
-            replay_memory.append([observation, action, reward, new_observation, done])
+            new_observation, reward, done, info = env.step(action) # Perform action in the evironment
+            new_observation = avail_item_values(env) # Overwrite the new observation with custom function
+            replay_memory.append([observation, action, reward, new_observation, done]) # Append to replay memory
 
-            # 3. Update the Main Network using the Bellman Equation
+            # Update the Main Network using the Bellman Equation
             if steps_to_update_target_model % 4 == 0 or done:
                 train_model(env, replay_memory, model, target_model, done)
 
-            observation = new_observation
+            observation = new_observation # Overwrite the old observation with the new observation
             total_training_rewards += reward
-            reward_list.append(reward); item_list.append(action)
+            reward_list.append(reward); item_list.append(action) # Used for printing performance below
 
-            if done:
+            if done: # If knapsack is full or item limit is exceeded
                 print(u'_________ n = {} _________'
                       u'\nTotal training rewards: {}\n'
                       u'Reward list = {}\n'
                       u'item list = {}\n'.format(episode,total_training_rewards,reward_list, item_list))
-
+                
                 if steps_to_update_target_model >= 100:
+                    # Copying the weights of the main to the target network
                     print('Copying main network weights to the target network weights')
                     target_model.set_weights(model.get_weights())
                     steps_to_update_target_model = 0
                 break
         
-        all_rewards.append(reward)
-        epsilon = MIN_EPSILON + (MAX_EPSILON - MIN_EPSILON) * np.exp(-DECAY * episode)
+        epsilon = MIN_EPSILON + (MAX_EPSILON - MIN_EPSILON) * np.exp(-DECAY * episode) # Update epsilon
         print("Epsilon:", epsilon, "\n")
-    
+        
+        episode_reward_history.append(total_training_rewards)
+        
+        # Calculating the average reward over last 100 episodes
+        if len(episode_reward_history) > 100:
+             del episode_reward_history[:1]
+        running_reward = np.mean(episode_reward_history)
+        total_reward_history.append(running_reward)
+        print("\nThe average reward over the last 100 episodes is\n", running_reward)
+        
     env.close()
-    model.save_weights(FILE_LOC)
+    model.save_weights(FILE_LOC) # Save weights for further testing
     
-    return all_rewards
+    return total_reward_history
 
 def test_dqn(env):
     
-    # 1. Initialize the model with saved weights
     try:
-        model = agent(env.N)
-        model.load_weights(FILE_LOC)
+        model = agent(env.N) # Initialize model
+        model.load_weights(FILE_LOC) # with the saved weights
         
-        all_rewards = []
+        all_rewards = [] # Initialize list for the rewards
             
         for episode in range(TEST_EPSISODES):
             observation = env.reset()
