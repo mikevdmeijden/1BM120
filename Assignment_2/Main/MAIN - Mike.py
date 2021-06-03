@@ -18,6 +18,7 @@ from collections import deque
 # Load environment
 env = or_gym.make('Knapsack-v2')
 env.mask = False
+np.random.seed(2021)
 
 print("Action Space: {}".format(env.action_space))
 print("State space: {}".format(env.observation_space))
@@ -62,7 +63,7 @@ def train(env, replay_memory, model, target_model, done):
     rewards.sort() # Sort the rewards list  
     nr_items = int(len_replay / HIGH_PER) # Number of items in the 'HIGH_PER' range
     high_list = [ x * (((i * FACTOR) + nr_items) / nr_items) for x, i in zip(rewards[-nr_items:], range(nr_items))] # Apply factor to high rewards 
-    low_list = [ x * (i / (nr_items * FACTOR)) for x, i in zip(rewards[:nr_items], range(nr_items))] # Apply factor to low rewards
+    low_list = [ x * (i / nr_items) for x, i in zip(rewards[:nr_items], range(nr_items))] # Apply factor to low rewards
     rewards = low_list + rewards[nr_items:-nr_items] + high_list # Overwrite with the adjusted rewards list
     mini_batch_ind = np.random.choice(list(range(len(rewards))), BATCH_SIZE, p = [x/sum(rewards) for x in rewards]) # Sample the indices of observations
     # where the observations with high rewards are more likely sampled.
@@ -119,6 +120,7 @@ def main():
     replay_memory = deque(maxlen=800)
 
     steps_to_update_target_model = 0
+    all_rewards = []
         
     for episode in range(TRAIN_EPSISODES):
         total_training_rewards = 0
@@ -159,7 +161,8 @@ def main():
                     target_model.set_weights(model.get_weights())
                     steps_to_update_target_model = 0
                 break
-
+        
+        all_rewards.append(reward)
         epsilon = MIN_EPSILON + (MAX_EPSILON - MIN_EPSILON) * np.exp(-DECAY * episode)
         print("Epsilon:", epsilon, "\n")
     env.close()

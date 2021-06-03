@@ -26,7 +26,7 @@ print("Action Space: {}".format(env.action_space))
 print("State space: {}".format(env.observation_space))
 
 #___ PARAMETERS ___#
-TRAIN_EPSISODES = 10
+TRAIN_EPSISODES = 1000
 TEST_EPSISODES = 100
 LEARNING_RATE = 0.05 
 DISCOUNT_RATE = 0.9 
@@ -48,7 +48,7 @@ def agent(item_count = env.N):
     model.add(Dense(item_count * 3, activation="relu", input_shape=(item_count,), kernel_initializer = init))
     model.add(Dense(item_count * 2, activation="relu", kernel_initializer = init))
     model.add(Dense(item_count, activation="relu", kernel_initializer = init))
-    model.add(Dense(item_count, kernel_initializer = init))
+    #model.add(Dense(item_count, kernel_initializer = init))
     model.compile(Adam(1e-3), MeanSquaredError(), metrics=["accuracy"])
     
     return model
@@ -108,6 +108,13 @@ def avail_item_values():
     
     return np.array(avail_item_values)
 
+def check_item_limit(action):
+    """ Check if the action taken does not exceed the item limit """
+    if env.item_limits[action] == 0:
+        return False
+    else:
+        return True
+
 def main(Decay, Learning_rate, Discount_rate):
     
     DECAY = Decay
@@ -120,7 +127,7 @@ def main(Decay, Learning_rate, Discount_rate):
     # Set the same weights as the Main Model for Target Model
     target_model.set_weights(model.get_weights())
     # Initialize Replay Memory
-    replay_memory = deque(maxlen=800)
+    replay_memory = deque(maxlen=1000)
     
     episode_reward_history = []
     total_reward_history = []
@@ -144,7 +151,7 @@ def main(Decay, Learning_rate, Discount_rate):
             else: # Exploit
                 predicted = model.predict(observation.reshape(1, env.N))
                 action = np.argmax(predicted)
-                
+            
             new_observation, reward, done, info = env.step(action)
             new_observation = avail_item_values()
             replay_memory.append([observation, action, reward, new_observation, done])
@@ -155,13 +162,14 @@ def main(Decay, Learning_rate, Discount_rate):
 
             observation = new_observation
             total_training_rewards += reward
+            print("Action:", action, "Limit:", env.item_limits[action])
             reward_list.append(reward); item_list.append(action)
 
             if done:
-                # print(u'_________ n = {} _________'
-                #       u'\nTotal training rewards: {}\n'
-                #       u'Reward list = {}\n'
-                #       u'item list = {}\n'.format(episode,total_training_rewards,reward_list, item_list))
+                print(u'_________ n = {} _________'
+                       u'\nTotal training rewards: {}\n'
+                       u'Reward list = {}\n'
+                       u'item list = {}\n'.format(episode,total_training_rewards,reward_list, item_list))
 
                 if steps_to_update_target_model >= 100:
                    #print('Copying main network weights to the target network weights')
@@ -282,9 +290,9 @@ def Optimal():
     return a
 
 
-DecayRate()
+#DecayRate()
 #LearningRate()
-#DiscountRate()  
+DiscountRate()  
 #a = Optimal()
 #print(a[1])
 
